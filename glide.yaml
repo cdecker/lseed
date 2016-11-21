@@ -1,0 +1,14 @@
+package: github.com/cdecker/lightning-seed
+import:
+- package: github.com/miekg/dns
+- package: github.com/prometheus/client_golang
+  version: ^0.8.0
+- package: github.com/elazarl/go-bindata-assetfs
+  subpackages:
+  - '...'
+- package: github.com/cdecker/kugelblitz
+  subpackages:
+  - '...'
+- package: github.com/powerman/rpc-codec
+  subpackages:
+  - jsonrpc2
