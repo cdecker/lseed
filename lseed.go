@@ -9,21 +9,17 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/cdecker/kugelblitz/lightningrpc"
+	"github.com/cdecker/lightning-seed/seed"
 )
 
 var (
-	lightningRpc  *lightningrpc.LightningRpc
+	lightningRpc *lightningrpc.LightningRpc
+
 	listenPort    = flag.Int("port", 53, "Port to listen for incoming requests.")
 	pollInterval  = flag.Int("poll-interval", 10, "Time between polls to lightningd for updates")
 	lightningSock = flag.String("lightning-sock", "$HOME/.lightning/lightning-rpc", "Location of the lightning socket")
 	debug         = flag.Bool("debug", false, "Be very verbose")
-)
-
-const (
-	// Default port for lightning nodes. A and AAAA queries only
-	// return nodes that listen to this port, SRV queries can
-	// actually specify a port, so they return all nodes.
-	defaultPort = 9735
+	numResults    = flag.Int("results", 25, "How many results shall we return to a query?")
 )
 
 // Expand variables in paths such as $HOME
@@ -36,24 +32,21 @@ func expandVariables() error {
 	return nil
 }
 
-// The local view of the network
-type NetworkView struct {
-	nodes    []lightningrpc.Node
-	nodesMut sync.Mutex
-}
-
 // Regularly polls the lightningd node and updates the local NetworkView.
-func poller(lrpc *lightningrpc.LightningRpc, net *NetworkView) {
+func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView, wg *sync.WaitGroup) {
+	defer func() { wg.Done() }()
 	for {
-		r := lightningrpc.GetNodesResponse{}
-		err := lrpc.GetNodes(&lightningrpc.Empty{}, &r)
+		r, err := lrpc.GetNodes()
 		if err != nil {
 			log.Errorf("Error trying to get update from lightningd: %v", err)
 		} else {
 			log.Debugf("Got %d nodes from lightningd", len(r.Nodes))
-			net.nodesMut.Lock()
-			net.nodes = r.Nodes
-			net.nodesMut.Unlock()
+			for _, n := range r.Nodes {
+				if n.Ip == "" || n.Port <= 1024 {
+					continue
+				}
+				nview.AddNode(n)
+			}
 		}
 		time.Sleep(time.Second * time.Duration(*pollInterval))
 	}
@@ -70,14 +63,16 @@ func configure() {
 	}
 }
 
+// Main entry point for the lightning-seed
 func main() {
+	var wg sync.WaitGroup
 	configure()
 	lightningRpc = lightningrpc.NewLightningRpc(*lightningSock)
 
-	net := NetworkView{
-		nodesMut: sync.Mutex{},
-	}
+	nview := seed.NewNetworkView()
+	wg.Add(3)
+	dnsServer := seed.NewDnsServer(nview)
 
-	go poller(lightningRpc, &net)
-	time.Sleep(100 * time.Second)
+	go poller(lightningRpc, nview, &wg)
+	dnsServer.Serve()
 }
