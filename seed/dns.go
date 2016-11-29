@@ -77,7 +77,7 @@ func (ds *DnsServer) handleSRVQuery(request *dns.Msg, response *dns.Msg) {
 	nodes := ds.netview.RandomSample(255, 25)
 
 	header := dns.RR_Header{
-		Name:   "_lightning._tcp.bitcoinstats.com.",
+		Name:   request.Question[0].Name,
 		Rrtype: dns.TypeSRV,
 		Class:  dns.ClassINET,
 		Ttl:    60,
@@ -93,7 +93,6 @@ func (ds *DnsServer) handleSRVQuery(request *dns.Msg, response *dns.Msg) {
 			Port:     n.Port,
 		}
 		response.Answer = append(response.Answer, rr)
-
 		if n.Type&1 == 1 {
 			addAAAAResponse(n, nodeName, &response.Extra)
 		} else {
@@ -127,6 +126,8 @@ func (ds *DnsServer) handleLightningDns(w dns.ResponseWriter, r *dns.Msg) {
 		case dns.TypeSRV:
 			ds.handleSRVQuery(r, m)
 		}
+	} else if name == "_nodes._tcp.lseed.bitcoinstats.com." {
+		ds.handleSRVQuery(r, m)
 	} else {
 		splits := strings.SplitN(name, ".", 3)
 		if len(splits) != 3 || len(splits[0])+len(splits[1]) != 65 {
@@ -157,6 +158,8 @@ func (ds *DnsServer) handleLightningDns(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 	w.WriteMsg(m)
+	log.WithField("replies", len(m.Answer)).Debugf(
+		"Replying with %d answers and %d extras.", len(m.Answer), len(m.Extra))
 }
 
 func (ds *DnsServer) Serve() {

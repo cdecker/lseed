@@ -9,7 +9,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/cdecker/kugelblitz/lightningrpc"
-	"github.com/cdecker/lightning-seed/seed"
+	"github.com/cdecker/lseed/seed"
 )
 
 var (
