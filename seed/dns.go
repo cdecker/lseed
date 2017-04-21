@@ -16,12 +16,14 @@ import (
 )
 
 type DnsServer struct {
-	netview *NetworkView
+	netview    *NetworkView
+	listenAddr string
 }
 
-func NewDnsServer(netview *NetworkView) *DnsServer {
+func NewDnsServer(netview *NetworkView, listenAddr string) *DnsServer {
 	return &DnsServer{
-		netview: netview,
+		netview:    netview,
+		listenAddr: listenAddr,
 	}
 }
 
@@ -164,7 +166,7 @@ func (ds *DnsServer) handleLightningDns(w dns.ResponseWriter, r *dns.Msg) {
 
 func (ds *DnsServer) Serve() {
 	dns.HandleFunc("lseed.bitcoinstats.com.", ds.handleLightningDns)
-	server := &dns.Server{Addr: ":8053", Net: "udp"}
+	server := &dns.Server{Addr: ds.listenAddr, Net: "udp"}
 	if err := server.ListenAndServe(); err != nil {
 		log.Errorf("Failed to setup the udp server: %s\n", err.Error())
 	}

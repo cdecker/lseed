@@ -16,8 +16,7 @@ const (
 	// Default port for lightning nodes. A and AAAA queries only
 	// return nodes that listen to this port, SRV queries can
 	// actually specify a port, so they return all nodes.
-	//defaultPort = 9735
-	defaultPort = 6331
+	defaultPort = 9735
 )
 
 // A bitfield in which bit 0 indicates whether it is an IPv6 if set,
