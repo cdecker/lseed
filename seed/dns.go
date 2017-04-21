@@ -8,10 +8,12 @@ package seed
 // shoutout to miekg for his dns library :-)
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/adiabat/bech32"
 	"github.com/miekg/dns"
 )
 
@@ -86,7 +88,12 @@ func (ds *DnsServer) handleSRVQuery(request *dns.Msg, response *dns.Msg) {
 	}
 
 	for _, n := range nodes {
-		nodeName := fmt.Sprintf("%s.%s.lseed.bitcoinstats.com.", n.Id[1:64], n.Id[64:])
+		rawId, err := hex.DecodeString(n.Id)
+		if err != nil {
+			continue
+		}
+		encodedId := bech32.Encode("ln", rawId)
+		nodeName := fmt.Sprintf("%s.lseed.bitcoinstats.com.", encodedId)
 		rr := &dns.SRV{
 			Hdr:      header,
 			Priority: 10,
@@ -131,12 +138,20 @@ func (ds *DnsServer) handleLightningDns(w dns.ResponseWriter, r *dns.Msg) {
 	} else if name == "_nodes._tcp.lseed.bitcoinstats.com." {
 		ds.handleSRVQuery(r, m)
 	} else {
-		splits := strings.SplitN(name, ".", 3)
-		if len(splits) != 3 || len(splits[0])+len(splits[1]) != 65 {
+		splits := strings.SplitN(name, ".", 2)
+		if len(splits) != 2 || len(splits[0]) != 62 {
 			log.Debug("Subdomain does not appear to be a valid node Id")
 			return
 		}
-		id := fmt.Sprintf("0%s%s", splits[0], splits[1])
+
+		prefix, rawId, err := bech32.Decode(splits[0])
+
+		if err != nil || prefix != "ln" {
+			log.Errorf("Unable to decode address %s, or wrong prefix %s",
+				splits[0], prefix)
+		}
+
+		id := hex.EncodeToString(rawId)
 		n, ok := ds.netview.nodes[id]
 		if !ok {
 			log.Debugf("Unable to find node with ID %s", id)

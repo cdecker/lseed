@@ -12,3 +12,4 @@ import:
 - package: github.com/powerman/rpc-codec
   subpackages:
   - jsonrpc2
+- package: github.com/adiabat/bech32
