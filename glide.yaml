@@ -1,4 +1,4 @@
-package: github.com/cdecker/lightning-seed
+package: github.com/cdecker/lseed
 import:
 - package: github.com/miekg/dns
 - package: github.com/prometheus/client_golang
