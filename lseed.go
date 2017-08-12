@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os/user"
 	"strings"
-	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -16,6 +15,7 @@ var (
 	lightningRpc *lightningrpc.LightningRpc
 
 	listenAddr    = flag.String("listen", "0.0.0.0:8053", "Listen address for incoming requests.")
+	rootDomain    = flag.String("root-domain", "lseed.bitcoinstats.com", "Root DNS seed domain.")
 	pollInterval  = flag.Int("poll-interval", 10, "Time between polls to lightningd for updates")
 	lightningSock = flag.String("lightning-sock", "$HOME/.lightning/lightning-rpc", "Location of the lightning socket")
 	debug         = flag.Bool("debug", false, "Be very verbose")
@@ -33,16 +33,16 @@ func expandVariables() error {
 }
 
 // Regularly polls the lightningd node and updates the local NetworkView.
-func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView, wg *sync.WaitGroup) {
-	defer func() { wg.Done() }()
+func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView) {
 	for {
 		r, err := lrpc.GetNodes()
+
 		if err != nil {
 			log.Errorf("Error trying to get update from lightningd: %v", err)
 		} else {
 			log.Debugf("Got %d nodes from lightningd", len(r.Nodes))
 			for _, n := range r.Nodes {
-				if n.Ip == "" || n.Port <= 1024 {
+				if len(n.Addresses) == 0 {
 					continue
 				}
 				nview.AddNode(n)
@@ -65,14 +65,12 @@ func configure() {
 
 // Main entry point for the lightning-seed
 func main() {
-	var wg sync.WaitGroup
 	configure()
 	lightningRpc = lightningrpc.NewLightningRpc(*lightningSock)
 
 	nview := seed.NewNetworkView()
-	wg.Add(3)
-	dnsServer := seed.NewDnsServer(nview, *listenAddr)
+	dnsServer := seed.NewDnsServer(nview, *listenAddr, *rootDomain)
 
-	go poller(lightningRpc, nview, &wg)
+	go poller(lightningRpc, nview)
 	dnsServer.Serve()
 }

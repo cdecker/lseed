@@ -23,14 +23,17 @@ const (
 // and bit 1 indicates whether it uses the default port if set.
 type NodeType uint8
 
+type Address struct {
+	IP   net.IP
+	Port uint16
+}
+
 // Local model of a node,
 type Node struct {
 	Id        string
 	LastSeen  time.Time
-	Ip        net.IP
-	Port      uint16
-	IpVersion uint8
 	Type      NodeType
+	Addresses []Address
 }
 
 // The local view of the network
@@ -43,14 +46,12 @@ type NetworkView struct {
 // query is set to `0xFF`. Relies on random map-iteration ordering
 // internally.
 func (nv *NetworkView) RandomSample(query NodeType, count int) []Node {
-	var found int
 	var result []Node
 	for _, n := range nv.nodes {
-		if n.Type == query || query == 255 {
+		if n.Type&query != 0 || query == 255 {
 			result = append(result, n)
-			count += 1
 		}
-		if found >= count {
+		if len(result) == count {
 			break
 		}
 	}
@@ -62,16 +63,33 @@ func (nv *NetworkView) RandomSample(query NodeType, count int) []Node {
 func (nv *NetworkView) AddNode(node lrpc.Node) Node {
 	n := Node{
 		Id:       node.Id,
-		Ip:       net.ParseIP(node.Ip),
-		Port:     node.Port,
 		LastSeen: time.Now(),
 	}
 
-	if n.Ip.To4() == nil {
-		n.Type |= 1
+	for _, a := range node.Addresses {
+
+		if a.Type != "ipv4" && a.Type != "ipv6" {
+			continue
+		}
+
+		address := Address{
+			IP:   net.ParseIP(a.Address),
+			Port: a.Port,
+		}
+
+		if address.IP.To4() == nil {
+			n.Type |= 1
+		} else {
+			n.Type |= 1 << 2
+		}
+
+		if address.Port == defaultPort {
+			n.Type |= 1 << 1
+		}
+		n.Addresses = append(n.Addresses, address)
 	}
-	if n.Port == defaultPort {
-		n.Type |= 1 << 1
+	if len(n.Addresses) == 0 {
+		return n
 	}
 
 	nv.nodesMut.Lock()

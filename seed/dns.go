@@ -10,22 +10,26 @@ package seed
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/adiabat/bech32"
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/miekg/dns"
 )
 
 type DnsServer struct {
 	netview    *NetworkView
 	listenAddr string
+	rootDomain string
 }
 
-func NewDnsServer(netview *NetworkView, listenAddr string) *DnsServer {
+func NewDnsServer(netview *NetworkView, listenAddr, rootDomain string) *DnsServer {
 	return &DnsServer{
 		netview:    netview,
 		listenAddr: listenAddr,
+		rootDomain: rootDomain,
 	}
 }
 
@@ -36,11 +40,20 @@ func addAResponse(n Node, name string, responses *[]dns.RR) {
 		Ttl:    60,
 		Name:   name,
 	}
-	rr := &dns.A{
-		Hdr: header,
-		A:   n.Ip,
+
+	for _, a := range n.Addresses {
+
+		if a.IP.To4() == nil {
+			continue
+		}
+
+		rr := &dns.A{
+			Hdr: header,
+			A:   a.IP.To4(),
+		}
+		*responses = append(*responses, rr)
 	}
-	*responses = append(*responses, rr)
+
 }
 
 func addAAAAResponse(n Node, name string, responses *[]dns.RR) {
@@ -50,11 +63,18 @@ func addAAAAResponse(n Node, name string, responses *[]dns.RR) {
 		Ttl:    60,
 		Name:   name,
 	}
-	rr := &dns.AAAA{
-		Hdr:  header,
-		AAAA: n.Ip,
+	for _, a := range n.Addresses {
+
+		if a.IP.To4() != nil {
+			continue
+		}
+
+		rr := &dns.AAAA{
+			Hdr:  header,
+			AAAA: a.IP.To16(),
+		}
+		*responses = append(*responses, rr)
 	}
-	*responses = append(*responses, rr)
 }
 
 func (ds *DnsServer) handleAAAAQuery(request *dns.Msg, response *dns.Msg) {
@@ -92,88 +112,128 @@ func (ds *DnsServer) handleSRVQuery(request *dns.Msg, response *dns.Msg) {
 		if err != nil {
 			continue
 		}
+
 		encodedId := bech32.Encode("ln", rawId)
-		nodeName := fmt.Sprintf("%s.lseed.bitcoinstats.com.", encodedId)
+		nodeName := fmt.Sprintf("%s.%s.", encodedId, ds.rootDomain)
 		rr := &dns.SRV{
 			Hdr:      header,
 			Priority: 10,
 			Weight:   10,
 			Target:   nodeName,
-			Port:     n.Port,
+			Port:     n.Addresses[0].Port,
 		}
 		response.Answer = append(response.Answer, rr)
-		if n.Type&1 == 1 {
-			addAAAAResponse(n, nodeName, &response.Extra)
-		} else {
-			addAResponse(n, nodeName, &response.Extra)
-		}
+		//if n.Type&1 == 1 {
+		//	addAAAAResponse(n, nodeName, &response.Extra)
+		//} else {
+		//	addAResponse(n, nodeName, &response.Extra)
+		//}
 	}
 
 }
 
+type DnsRequest struct {
+	subdomain string
+	qtype     uint16
+	atypes    int
+	realm     int
+	node_id   string
+}
+
+func (ds *DnsServer) parseRequest(name string, qtype uint16) (*DnsRequest, error) {
+	// Check that this is actually intended for us and not just some other domain
+	if !strings.HasSuffix(name, fmt.Sprintf("%s.", ds.rootDomain)) {
+		return nil, fmt.Errorf("malformed request: %s", name)
+	}
+
+	// Check that we actually like the request
+	if qtype != dns.TypeA && qtype != dns.TypeAAAA && qtype != dns.TypeSRV {
+		return nil, fmt.Errorf("refusing to handle query type %d (%s)", qtype, dns.TypeToString[qtype])
+	}
+
+	req := &DnsRequest{
+		subdomain: name[:len(name)-len(ds.rootDomain)-1],
+		qtype:     qtype,
+		atypes:    6,
+	}
+	parts := strings.Split(req.subdomain, ".")
+
+	for _, cond := range parts {
+		if len(cond) == 0 {
+			continue
+		}
+		k, v := cond[0], cond[1:]
+
+		if k == 'r' {
+			req.realm, _ = strconv.Atoi(v)
+		} else if k == 'a' && qtype == dns.TypeSRV {
+			req.atypes, _ = strconv.Atoi(v)
+		} else if k == 'l' {
+			_, bin, err := bech32.Decode(cond)
+			if err != nil {
+				return nil, fmt.Errorf("malformed bech32 pubkey")
+			}
+
+			p, err := btcec.ParsePubKey(bin, btcec.S256())
+			if err != nil {
+				return nil, fmt.Errorf("not a valid pubkey")
+			}
+			req.node_id = fmt.Sprintf("%x", p.SerializeCompressed())
+		}
+	}
+
+	return req, nil
+}
+
 func (ds *DnsServer) handleLightningDns(w dns.ResponseWriter, r *dns.Msg) {
 
-	name := r.Question[0].Name
-	qtype := r.Question[0].Qtype
+	if len(r.Question) < 1 {
+		log.Errorf("empty request")
+		return
+	}
+
+	req, err := ds.parseRequest(r.Question[0].Name, r.Question[0].Qtype)
+
+	if err != nil {
+		log.Errorf("error parsing request: %v", err)
+		return
+	}
 
 	log.WithFields(log.Fields{
-		"subdomain": name,
-		"type":      dns.TypeToString[qtype],
+		"subdomain": req.subdomain,
+		"type":      dns.TypeToString[req.qtype],
 	}).Debugf("Incoming request")
 
 	m := new(dns.Msg)
 	m.SetReply(r)
 
-	if name == "lseed.bitcoinstats.com." {
-		switch qtype {
+	// Is this a wildcard query?
+	if req.node_id == "" {
+		switch req.qtype {
 		case dns.TypeAAAA:
 			ds.handleAAAAQuery(r, m)
 			break
 		case dns.TypeA:
+			log.Debugf("Wildcard query")
 			ds.handleAQuery(r, m)
 			break
 		case dns.TypeSRV:
 			ds.handleSRVQuery(r, m)
 		}
-	} else if name == "_nodes._tcp.lseed.bitcoinstats.com." {
-		ds.handleSRVQuery(r, m)
 	} else {
-		splits := strings.SplitN(name, ".", 2)
-		if len(splits) != 2 || len(splits[0]) != 62 {
-			log.Debug("Subdomain does not appear to be a valid node Id")
-			return
-		}
-
-		prefix, rawId, err := bech32.Decode(splits[0])
-
-		if err != nil || prefix != "ln" {
-			log.Errorf("Unable to decode address %s, or wrong prefix %s",
-				splits[0], prefix)
-		}
-
-		id := hex.EncodeToString(rawId)
-		n, ok := ds.netview.nodes[id]
+		n, ok := ds.netview.nodes[req.node_id]
 		if !ok {
-			log.Debugf("Unable to find node with ID %s", id)
-		} else {
-			log.Debugf("Found node matching ID %s %#v", id, n)
+			log.Debugf("Unable to find node with ID %s", req.node_id)
 		}
 
 		// Reply with the correct type
-		if qtype == dns.TypeAAAA {
-			if n.Type&1 == 1 {
-				addAAAAResponse(n, name, &m.Answer)
-			} else {
-				addAAAAResponse(n, name, &m.Extra)
-			}
-		} else if qtype == dns.TypeA {
-			if n.Type&1 == 0 {
-				addAResponse(n, name, &m.Answer)
-			} else {
-				addAResponse(n, name, &m.Extra)
-			}
+		if req.qtype == dns.TypeAAAA {
+			addAAAAResponse(n, r.Question[0].Name, &m.Answer)
+		} else if req.qtype == dns.TypeA {
+			addAResponse(n, r.Question[0].Name, &m.Answer)
 		}
 	}
+
 	w.WriteMsg(m)
 	log.WithField("replies", len(m.Answer)).Debugf(
 		"Replying with %d answers and %d extras.", len(m.Answer), len(m.Extra))

@@ -13,3 +13,5 @@ import:
   subpackages:
   - jsonrpc2
 - package: github.com/adiabat/bech32
+- package: github.com/thoj/go-ircevent
+  version: ~0.1.0
