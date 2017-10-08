@@ -240,7 +240,7 @@ func (ds *DnsServer) handleLightningDns(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (ds *DnsServer) Serve() {
-	dns.HandleFunc("lseed.bitcoinstats.com.", ds.handleLightningDns)
+	dns.HandleFunc(ds.rootDomain, ds.handleLightningDns)
 	server := &dns.Server{Addr: ds.listenAddr, Net: "udp"}
 	if err := server.ListenAndServe(); err != nil {
 		log.Errorf("Failed to setup the udp server: %s\n", err.Error())
