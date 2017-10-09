@@ -48,7 +48,7 @@ func expandVariables() error {
 
 // Regularly polls the lightningd node and updates the local NetworkView.
 func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView) {
-	for {
+	scrapeGraph := func() {
 		r, err := lrpc.GetNodes()
 
 		if err != nil {
@@ -59,10 +59,18 @@ func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView) {
 				if len(n.Addresses) == 0 {
 					continue
 				}
-				nview.AddNode(n)
+				if _, err := nview.AddNode(node); err != nil {
+					log.Debugf("Unable to add node: %v", err)
+				}
 			}
 		}
-		time.Sleep(time.Second * time.Duration(*pollInterval))
+	}
+
+	scrapeGraph()
+
+	ticker := time.NewTicker(time.Second * time.Duration(*pollInterval))
+	for range ticker.C {
+		scrapeGraph()
 	}
 }
 
