@@ -9,6 +9,21 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/cdecker/kugelblitz/lightningrpc"
 	"github.com/cdecker/lseed/seed"
+	"github.com/roasbeef/lseed/seed"
+)
+
+var (
+	listenAddr = flag.String("listen", "0.0.0.0:53", "Listen address for incoming requests.")
+
+	lndNode = flag.String("lnd-node", "localhost:10009", "The host:port of the backing lnd node")
+
+	rootDomain = flag.String("root-domain", "nodes.lightning.directory", "Root DNS seed domain.")
+
+	pollInterval = flag.Int("poll-interval", 30, "Time between polls to lightningd for updates")
+
+	debug = flag.Bool("debug", false, "Be very verbose")
+
+	numResults = flag.Int("results", 25, "How many results shall we return to a query?")
 )
 
 var (
