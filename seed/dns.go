@@ -142,7 +142,7 @@ type DnsRequest struct {
 
 func (ds *DnsServer) parseRequest(name string, qtype uint16) (*DnsRequest, error) {
 	// Check that this is actually intended for us and not just some other domain
-	if !strings.HasSuffix(name, fmt.Sprintf("%s.", ds.rootDomain)) {
+	if !strings.HasSuffix(strings.ToLower(name), fmt.Sprintf("%s.", ds.rootDomain)) {
 		return nil, fmt.Errorf("malformed request: %s", name)
 	}
 
