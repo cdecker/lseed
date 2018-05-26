@@ -12,23 +12,9 @@ import (
 )
 
 var (
-	listenAddr = flag.String("listen", "0.0.0.0:53", "Listen address for incoming requests.")
-
-	lndNode = flag.String("lnd-node", "localhost:10009", "The host:port of the backing lnd node")
-
-	rootDomain = flag.String("root-domain", "nodes.lightning.directory", "Root DNS seed domain.")
-
-	pollInterval = flag.Int("poll-interval", 30, "Time between polls to lightningd for updates")
-
-	debug = flag.Bool("debug", false, "Be very verbose")
-
-	numResults = flag.Int("results", 25, "How many results shall we return to a query?")
-)
-
-var (
 	lightningRpc *lightningrpc.LightningRpc
 
-	listenAddr    = flag.String("listen", "0.0.0.0:8053", "Listen address for incoming requests.")
+	listenAddr    = flag.String("listen", "0.0.0.0:53", "Listen address for incoming requests.")
 	rootDomain    = flag.String("root-domain", "lseed.bitcoinstats.com", "Root DNS seed domain.")
 	pollInterval  = flag.Int("poll-interval", 10, "Time between polls to lightningd for updates")
 	lightningSock = flag.String("lightning-sock", "$HOME/.lightning/lightning-rpc", "Location of the lightning socket")
@@ -59,9 +45,7 @@ func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView) {
 				if len(n.Addresses) == 0 {
 					continue
 				}
-				if _, err := nview.AddNode(node); err != nil {
-					log.Debugf("Unable to add node: %v", err)
-				}
+				nview.AddNode(n)
 			}
 		}
 	}
