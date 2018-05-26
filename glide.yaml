@@ -6,9 +6,6 @@ import:
 - package: github.com/elazarl/go-bindata-assetfs
   subpackages:
   - '...'
-- package: github.com/cdecker/kugelblitz
-  subpackages:
-  - '...'
 - package: github.com/powerman/rpc-codec
   subpackages:
   - jsonrpc2

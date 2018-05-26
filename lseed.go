@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cdecker/lseed/lightningrpc"
+
 	log "github.com/Sirupsen/logrus"
-	"github.com/cdecker/kugelblitz/lightningrpc"
 	"github.com/cdecker/lseed/seed"
 )
 
@@ -35,7 +36,7 @@ func expandVariables() error {
 // Regularly polls the lightningd node and updates the local NetworkView.
 func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView) {
 	scrapeGraph := func() {
-		r, err := lrpc.GetNodes()
+		r, err := lrpc.ListNodes()
 
 		if err != nil {
 			log.Errorf("Error trying to get update from lightningd: %v", err)

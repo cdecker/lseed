@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	lrpc "github.com/cdecker/kugelblitz/lightningrpc"
+	lrpc "github.com/cdecker/lseed/lightningrpc"
 )
 
 const (
