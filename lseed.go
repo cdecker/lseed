@@ -80,8 +80,11 @@ func main() {
 	lightningRpc = glightning.NewLightning()
 	lightningRpc.StartUp(*lightningSock, filepath.Join(*lightningDir, *network))
 
+	// We currently only support mainnet.
+	realm := 0
+
 	nview := seed.NewNetworkView()
-	dnsServer := seed.NewDnsServer(nview, *listenAddr, *rootDomain)
+	dnsServer := seed.NewDnsServer(nview, *listenAddr, *rootDomain, realm)
 
 	go poller(lightningRpc, nview)
 	dnsServer.Serve()

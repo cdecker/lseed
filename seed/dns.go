@@ -23,13 +23,15 @@ type DnsServer struct {
 	netview    *NetworkView
 	listenAddr string
 	rootDomain string
+	realm int
 }
 
-func NewDnsServer(netview *NetworkView, listenAddr, rootDomain string) *DnsServer {
+func NewDnsServer(netview *NetworkView, listenAddr, rootDomain string, realm int) *DnsServer {
 	return &DnsServer{
 		netview:    netview,
 		listenAddr: listenAddr,
 		rootDomain: rootDomain,
+		realm: realm,
 	}
 }
 
@@ -166,6 +168,9 @@ func (ds *DnsServer) parseRequest(name string, qtype uint16) (*DnsRequest, error
 
 		if k == 'r' {
 			req.realm, _ = strconv.Atoi(v)
+			if req.realm != ds.realm {
+				return nil, fmt.Errorf("unsupported network")
+			}
 		} else if k == 'a' && qtype == dns.TypeSRV {
 			req.atypes, _ = strconv.Atoi(v)
 		} else if k == 'l' {
