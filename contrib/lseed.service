@@ -1,0 +1,16 @@
+[Unit]
+Description=Lightning Network Seeder
+After=lightningd.service
+
+[Service]
+ExecStart=/home/bitcoin/go/bin/lseed --listen <ip>:<port> --root-domain <domain>
+User=bitcoin
+Group=bitcoin
+Type=simple
+KillMode=process
+TimeoutSec=60
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
