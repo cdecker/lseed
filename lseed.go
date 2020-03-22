@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,7 +19,9 @@ var (
 	listenAddr    = flag.String("listen", "0.0.0.0:53", "Listen address for incoming requests.")
 	rootDomain    = flag.String("root-domain", "lseed.bitcoinstats.com", "Root DNS seed domain.")
 	pollInterval  = flag.Int("poll-interval", 10, "Time between polls to lightningd for updates")
-	lightningSock = flag.String("lightning-sock", "$HOME/.lightning/lightning-rpc", "Location of the lightning socket")
+	lightningDir  = flag.String("lightning-dir", "$HOME/.lightning/", "The lightning directory.")
+	network       = flag.String("network", "bitcoin", "The network to run the seeder on. Used to guess the RPC socket path.")
+	lightningSock = flag.String("lightning-sock", "lightning-rpc", "Name of the lightning RPC socket")
 	debug         = flag.Bool("debug", false, "Be very verbose")
 	numResults    = flag.Int("results", 25, "How many results shall we return to a query?")
 )
@@ -73,7 +76,8 @@ func configure() {
 // Main entry point for the lightning-seed
 func main() {
 	configure()
-	lightningRpc = lightningrpc.NewLightningRpc(*lightningSock)
+	sockPath := filepath.Join(*lightningDir, *network, *lightningSock)
+	lightningRpc = lightningrpc.NewLightningRpc(sockPath)
 
 	nview := seed.NewNetworkView()
 	dnsServer := seed.NewDnsServer(nview, *listenAddr, *rootDomain)
