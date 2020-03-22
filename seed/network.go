@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	lrpc "github.com/cdecker/lseed/lightningrpc"
+	"github.com/niftynei/glightning/glightning"
 )
 
 const (
@@ -60,7 +60,7 @@ func (nv *NetworkView) RandomSample(query NodeType, count int) []Node {
 
 // Insert nodes into the map of known nodes. Existing nodes with the
 // same Id are overwritten.
-func (nv *NetworkView) AddNode(node lrpc.Node) Node {
+func (nv *NetworkView) AddNode(node *glightning.Node) Node {
 	n := Node{
 		Id:       node.Id,
 		LastSeen: time.Now(),
@@ -73,8 +73,8 @@ func (nv *NetworkView) AddNode(node lrpc.Node) Node {
 		}
 
 		address := Address{
-			IP:   net.ParseIP(a.Address),
-			Port: a.Port,
+			IP:   net.ParseIP(a.Addr),
+			Port: uint16(a.Port),
 		}
 
 		if address.IP.To4() == nil {

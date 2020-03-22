@@ -2,24 +2,25 @@ package main
 
 import (
 	"flag"
+	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/cdecker/lseed/lightningrpc"
+	"./seed"
 
+	"github.com/niftynei/glightning/glightning"
 	log "github.com/Sirupsen/logrus"
-	"github.com/cdecker/lseed/seed"
 )
 
 var (
-	lightningRpc *lightningrpc.LightningRpc
+	lightningRpc *glightning.Lightning
 
 	listenAddr    = flag.String("listen", "0.0.0.0:53", "Listen address for incoming requests.")
 	rootDomain    = flag.String("root-domain", "lseed.bitcoinstats.com", "Root DNS seed domain.")
 	pollInterval  = flag.Int("poll-interval", 10, "Time between polls to lightningd for updates")
-	lightningDir  = flag.String("lightning-dir", "$HOME/.lightning/", "The lightning directory.")
+	lightningDir  = flag.String("lightning-dir", filepath.Join(os.Getenv("HOME"),".lightning"), "The lightning directory.")
 	network       = flag.String("network", "bitcoin", "The network to run the seeder on. Used to guess the RPC socket path.")
 	lightningSock = flag.String("lightning-sock", "lightning-rpc", "Name of the lightning RPC socket")
 	debug         = flag.Bool("debug", false, "Be very verbose")
@@ -37,15 +38,15 @@ func expandVariables() error {
 }
 
 // Regularly polls the lightningd node and updates the local NetworkView.
-func poller(lrpc *lightningrpc.LightningRpc, nview *seed.NetworkView) {
+func poller(lrpc *glightning.Lightning, nview *seed.NetworkView) {
 	scrapeGraph := func() {
-		r, err := lrpc.ListNodes()
+		nodes, err := lrpc.ListNodes()
 
 		if err != nil {
 			log.Errorf("Error trying to get update from lightningd: %v", err)
 		} else {
-			log.Debugf("Got %d nodes from lightningd", len(r.Nodes))
-			for _, n := range r.Nodes {
+			log.Debugf("Got %d nodes from lightningd", len(nodes))
+			for _, n := range nodes {
 				if len(n.Addresses) == 0 {
 					continue
 				}
@@ -76,8 +77,8 @@ func configure() {
 // Main entry point for the lightning-seed
 func main() {
 	configure()
-	sockPath := filepath.Join(*lightningDir, *network, *lightningSock)
-	lightningRpc = lightningrpc.NewLightningRpc(sockPath)
+	lightningRpc = glightning.NewLightning()
+	lightningRpc.StartUp(*lightningSock, filepath.Join(*lightningDir, *network))
 
 	nview := seed.NewNetworkView()
 	dnsServer := seed.NewDnsServer(nview, *listenAddr, *rootDomain)
